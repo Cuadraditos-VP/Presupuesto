@@ -197,6 +197,12 @@ input[type=month]{background:var(--panel);border:1px solid var(--line);border-ra
 .av.ic{width:34px;height:34px;font-size:15px}
 span.av{cursor:default}
 
+.nube{position:relative}
+.nd{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--line)}
+.nube .nd{position:absolute;right:6px;bottom:7px;box-shadow:0 0 0 2px var(--bg)}
+.nd.ok{background:var(--in)} .nd.wait{background:#D9A23B} .nd.err{background:var(--out)}
+#nubeDot2{margin-right:8px;vertical-align:middle}
+.nubef{display:grid;gap:10px}
 .modal{position:fixed;inset:0;z-index:20;background:rgba(15,32,29,.5);display:flex;align-items:center;justify-content:center;padding:16px}
 .mcard{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:20px;width:min(520px,100%);max-height:min(80vh,640px);display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.25)}
 .mhead{display:flex;justify-content:space-between;align-items:center;padding:16px 16px 8px 20px}
@@ -256,7 +262,7 @@ span.av{cursor:default}
 </head>
 <body>
 <div class="wrap">
-  <header><h1>Presupuesto del mes</h1><div class="hd-r"><button class="ico" id="btnHist" type="button" aria-label="Ver historial por mes" title="Historial por mes"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg></button><input type="month" id="mes" aria-label="Mes"></div></header>
+  <header><h1>Presupuesto del mes</h1><div class="hd-r"><button class="ico nube" id="btnNube" type="button" aria-label="Sincronización" title="Sincronización"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4.25 4.25 0 0 1-.5 8.5H7z"/></svg><span class="nd" id="nubeDot"></span></button><button class="ico" id="btnHist" type="button" aria-label="Ver historial por mes" title="Historial por mes"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg></button><input type="month" id="mes" aria-label="Mes"></div></header>
   <nav class="tabs" role="tablist"><button role="tab" id="tabMes" aria-selected="true">Mes</button><button role="tab" id="tabTen" aria-selected="false">Tenencia</button><button role="tab" id="tabAho" aria-selected="false">Ahorros</button></nav>
   <div id="vMes">
 
@@ -340,6 +346,7 @@ span.av{cursor:default}
   </div>
 
   <div class="modal" id="histModal" role="dialog" aria-modal="true" aria-labelledby="histT" hidden><div class="mcard"><div class="mhead"><h2 id="histT">Historial por mes</h2><button class="x" id="histX" type="button" aria-label="Cerrar">&times;</button></div><div class="mbody" id="histBox"></div></div></div>
+  <div class="modal" id="nubeModal" role="dialog" aria-modal="true" aria-labelledby="nubeT" hidden><div class="mcard" style="width:min(400px,100%)"><div class="mhead"><h2 id="nubeT">Sincronizar</h2><button class="x" id="nubeX" type="button" aria-label="Cerrar">&times;</button></div><div class="mbody"><form id="nubeForm" class="nubef"><p class="sumsub" style="text-align:left;margin:0">Entrá con tu cuenta para ver los mismos datos en la PC y en el celular.</p><input class="fld" id="nubeMail" type="email" autocomplete="username" placeholder="Correo" required><input class="fld" id="nubePass" type="password" autocomplete="current-password" placeholder="Contraseña" required><button class="sb" type="submit">Entrar</button></form><div id="nubeInfo" class="nubef" hidden><p style="margin:0"><span class="nd nd-in" id="nubeDot2"></span><b id="nubeEst">Sincronizado</b></p><p class="sumsub" style="text-align:left;margin:0" id="nubeUser"></p><p class="sumsub" style="text-align:left;margin:0" id="nubeHora"></p><button class="sb" type="button" id="nubeSalir">Cerrar sesión</button></div><p class="sumsub" style="text-align:left;margin:10px 0 0;color:var(--out)" id="nubeMsg" role="status"></p></div></div></div>
 
   <div class="backup" id="backup" hidden>
     <span>Respaldo de tus datos</span>
@@ -1196,6 +1203,198 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js').catch(function(){});
   });
 }
+</script>
+<script type="module">
+/* ═══════════════════════════════════════════════════════════════
+   SINCRONIZACIÓN CON FIREBASE (Firestore)
+   - Sin sesión: la app funciona igual que antes, solo en este equipo.
+   - Con sesión: cada cambio se sube a usuarios/{uid}/datos/presupuesto
+     y los cambios de otros dispositivos llegan solos (onSnapshot).
+   - localStorage sigue siendo la copia local: si no hay internet,
+     se sigue usando y se sube cuando vuelve la conexión.
+   ═══════════════════════════════════════════════════════════════ */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, onSnapshot, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyADOsIf2nLapSXrQl_NIZif5g8k5r3bShw",
+  authDomain: "contador-a1d3e.firebaseapp.com",
+  projectId: "contador-a1d3e",
+  storageBucket: "contador-a1d3e.firebasestorage.app",
+  messagingSenderId: "160590135521",
+  appId: "1:160590135521:web:605523a65c4fa92f5b37a0"
+};
+
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+// Claves locales de la sincronización
+const PEND  = 'presupuesto-nube-pendiente'; // hay cambios locales sin confirmar en la nube
+const UIDK  = 'presupuesto-nube-uid';       // este equipo ya sincronizó con esta cuenta
+const COPIA = 'presupuesto-v1-copia-antes-de-nube'; // copia de seguridad local
+
+const ls = {
+  get: k => { try { return localStorage.getItem(k) } catch (e) { return null } },
+  set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} },
+  del: k => { try { localStorage.removeItem(k) } catch (e) {} }
+};
+const el = id => document.getElementById(id);
+
+let ref = null, cortar = null, primera = true, ultimoNube = null;
+let temporizador = null, remotoEnEspera = null, aplicando = false, ultimaHora = null;
+
+/* ── Estado visible (puntito en el ícono de la nube) ── */
+function estado(clase, texto) {
+  el('nubeDot').className = 'nd ' + clase;
+  el('nubeDot2').className = 'nd ' + clase;
+  el('nubeEst').textContent = texto;
+  el('btnNube').title = 'Sincronización: ' + texto;
+  el('nubeHora').textContent = ultimaHora ? 'Último cambio en la nube: ' + ultimaHora.toLocaleString('es-AR') : '';
+}
+function msg(t) { el('nubeMsg').textContent = t || '' }
+
+/* ── 1) Cada vez que la app guarda, también programamos la subida ──
+   La app llama a save() en cada tecla; esperamos 1 segundo de calma
+   antes de subir para no mandar un envío por cada número.            */
+const saveOriginal = window.save;
+window.save = function () {
+  saveOriginal();
+  if (aplicando) return;
+  ls.set(PEND, '1');
+  clearTimeout(temporizador);
+  temporizador = setTimeout(subir, 1000);
+};
+
+/* ── 2) SUBIR: guardamos todo el presupuesto como texto JSON.
+   (Firestore no acepta "listas dentro de listas", y la app las usa;
+   como texto entra tal cual, igual que en el respaldo exportado.)   */
+function subir() {
+  if (!ref) return;               // sin sesión: queda pendiente para cuando entres
+  stashMes();
+  const json = JSON.stringify(S);
+  if (json === ultimoNube) { ls.del(PEND); estado('ok', 'Sincronizado'); return; }
+  if (json.length > 900000) { estado('err', 'Demasiado grande'); msg('Los datos superan el límite de la nube (1 MB). Probá quitar algunos logos.'); return; }
+  estado('wait', 'Guardando…');
+  setDoc(ref, { json, actualizado: serverTimestamp() })
+    .then(() => {
+      ultimoNube = json;
+      if (JSON.stringify(S) === json) ls.del(PEND);
+    })
+    .catch(e => { estado('err', 'Error al guardar'); msg('No se pudo guardar: ' + e.code); });
+}
+
+/* ── 3) APLICAR datos que llegan de otro dispositivo ── */
+function editando() {
+  const a = document.activeElement;
+  return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA') && !el('nubeModal').contains(a);
+}
+function aplicarRemoto(json) {
+  if (editando()) { remotoEnEspera = json; return; }  // no te pisamos lo que estás escribiendo
+  remotoEnEspera = null;
+  let d; try { d = JSON.parse(json) } catch (e) { return }
+  aplicando = true;
+  try {
+    window.S = d; S.mig1 = 1;
+    if (!S.mes) S.mes = def.mes; if (!S.ahorros) S.ahorros = []; if (!S.ops) S.ops = [];
+    S.ahorros.forEach(c => { if (!c.id) c.id = newId() });
+    migTj(); ensureByMes(); gpdMig();
+    ls.set(KEY, JSON.stringify(S));
+    el('mes').value = S.mes; el('cot').value = fmtn(S.cot); el('gpd').value = fmtn(gpdGet());
+    build(); buildT(); buildA(); buildOps();
+  } finally { aplicando = false; }
+  ultimoNube = json;
+}
+document.addEventListener('focusout', () => {
+  setTimeout(() => { if (remotoEnEspera && !editando()) aplicarRemoto(remotoEnEspera) }, 0);
+});
+
+/* ── 4) ESCUCHAR la nube en tiempo real ── */
+function escuchar(user) {
+  primera = true; ultimoNube = null;
+  ref = doc(db, 'usuarios', user.uid, 'datos', 'presupuesto');
+  estado('wait', 'Conectando…');
+
+  cortar = onSnapshot(ref, snap => {
+    if (snap.metadata.hasPendingWrites) { estado('wait', 'Guardando…'); return; }
+
+    const yaSincronizado = ls.get(UIDK) === user.uid;
+
+    // Sin conexión todavía no sabemos qué hay en la nube: esperamos.
+    if (!snap.exists() && snap.metadata.fromCache) { estado('wait', 'Sin conexión'); return; }
+
+    // La nube está vacía: es la primera vez → subimos lo de este equipo.
+    if (!snap.exists()) { primera = false; ls.set(UIDK, user.uid); subir(); return; }
+
+    const d = snap.data();
+    ultimaHora = d.actualizado?.toDate?.() || ultimaHora;
+
+    if (primera) {
+      primera = false;
+      // Este equipo ya sincronizaba y tiene cambios hechos sin conexión → ganan esos.
+      if (yaSincronizado && ls.get(PEND)) { ultimoNube = d.json; subir(); return; }
+      // Primera vez en este equipo y la nube ya tiene datos → guardamos copia local y usamos la nube.
+      if (!yaSincronizado) {
+        ls.set(COPIA, ls.get(KEY) || '');
+        ls.set(UIDK, user.uid);
+        ls.del(PEND);
+      }
+    }
+
+    stashMes();
+    if (d.json !== JSON.stringify(S)) aplicarRemoto(d.json);
+    else ultimoNube = d.json;
+    if (!ls.get(PEND)) estado('ok', 'Sincronizado');
+  }, err => {
+    estado('err', 'Error');
+    msg(err.code === 'permission-denied'
+      ? 'La nube rechazó el acceso: revisá las reglas de Firestore.'
+      : 'Error de conexión: ' + err.code);
+  });
+}
+
+/* ── 5) SESIÓN ── */
+onAuthStateChanged(auth, user => {
+  if (cortar) { cortar(); cortar = null; }
+  ref = null; clearTimeout(temporizador);
+  el('nubeForm').hidden = !!user;
+  el('nubeInfo').hidden = !user;
+  if (!user) { ultimaHora = null; estado('', 'Sin sesión (solo este equipo)'); return; }
+  el('nubeUser').textContent = 'Cuenta: ' + user.email;
+  escuchar(user);
+});
+
+el('nubeForm').addEventListener('submit', e => {
+  e.preventDefault(); msg('Entrando…');
+  signInWithEmailAndPassword(auth, el('nubeMail').value.trim(), el('nubePass').value)
+    .then(() => { msg(''); el('nubePass').value = ''; })
+    .catch(err => msg(
+      err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found'
+        ? 'Correo o contraseña incorrectos.'
+        : err.code === 'auth/operation-not-allowed'
+        ? 'Falta activar "Correo electrónico/contraseña" en Firebase Authentication.'
+        : 'No se pudo entrar: ' + err.code));
+});
+el('nubeSalir').onclick = () => {
+  if (confirm('¿Cerrar sesión? Los datos quedan en este equipo, pero dejan de sincronizarse.')) signOut(auth);
+};
+
+/* ── 6) Ventana ── */
+let abridor = null;
+function cerrar() { el('nubeModal').hidden = true; document.body.style.overflow = ''; msg(''); if (abridor) abridor.focus(); }
+el('btnNube').onclick = function () {
+  abridor = this; el('nubeModal').hidden = false; document.body.style.overflow = 'hidden';
+  (el('nubeForm').hidden ? el('nubeX') : el('nubeMail')).focus();
+};
+el('nubeX').onclick = cerrar;
+el('nubeModal').addEventListener('click', e => { if (e.target === e.currentTarget) cerrar() });
+document.addEventListener('keydown', e => { if (!el('nubeModal').hidden && e.key === 'Escape') cerrar() });
+
+// Al volver la conexión, reintentamos lo pendiente.
+window.addEventListener('online', () => { if (ls.get(PEND)) subir() });
 </script>
 </body>
 </html>
