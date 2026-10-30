@@ -48,6 +48,18 @@ input[type=month]{background:var(--panel);border:1px solid var(--line);border-ra
 .gpd input:focus{border-bottom:1.5px solid var(--heroInk)}
 .proj .gpd b{display:inline;font:600 14px Figtree,sans-serif;color:var(--heroInk);font-variant-numeric:tabular-nums}
 .proj .gpd b.neg{color:#E479A6}
+.more{border:0;background:transparent;color:var(--heroMute);font:500 13px Figtree,sans-serif;cursor:pointer;padding:6px 0 0;display:inline-flex;align-items:center;gap:6px}
+.more:hover,.more:focus-visible{color:var(--heroInk)}
+.more i{display:inline-block;width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2px) rotate(45deg);transition:transform .15s}
+.more[aria-expanded=true] i{transform:translateY(1px) rotate(-135deg)}
+.pmore{margin-top:6px;padding-top:8px;border-top:1px solid rgba(234,245,240,.15)}
+.pmore .gpd{margin-top:4px}
+.gpd input.dd{width:34px;text-align:center}
+.gpd .hoy{border:0;background:transparent;color:var(--heroMute);font:500 12.5px Figtree,sans-serif;text-decoration:underline;cursor:pointer;padding:0 0 0 4px}
+.gpd .hoy:hover,.gpd .hoy:focus-visible{color:var(--heroInk)}
+.hero .daybox .rit{display:block;font-style:normal;font-size:14px;color:var(--heroMute);margin-top:2px}
+.hero .daybox .rit b{display:inline;font:600 14px Figtree,sans-serif;color:var(--heroInk);font-variant-numeric:tabular-nums}
+.hero .daybox .rit b.neg{color:#E479A6}
 .hero .daybox{text-align:right}
 .hero .daybox b{font:700 28px/1.2 'Bricolage Grotesque',Figtree,sans-serif;display:block}
 .hero .daybox.neg b{color:#E479A6}
@@ -285,8 +297,13 @@ html,body{max-width:100%;overflow-x:hidden}
 
   <section class="hero">
     <div><small>Tenencia actual</small><div class="big"><span>$</span><b id="tenencia">0</b></div></div>
-    <div class="proj"><div id="proyBox"><small>Te quedan hasta fin de mes</small><b id="proy">$ 0</b></div><div class="gpd">Gastando $ <input id="gpd" class="cell" inputmode="numeric" aria-label="Gasto por día"> por día te quedarían <b id="gpdR">$ 0</b> a fin de mes</div></div>
-    <div class="daybox" id="day"><small>Para gastar por día</small><b id="dNum">$ 0</b><em id="dTxt"></em><div class="dbar" title="Avance del mes"><i id="dBar"></i></div></div>
+    <div class="proj"><div id="proyBox"><small>Te quedan hasta fin de mes</small><b id="proy">$ 0</b></div><button type="button" class="more" id="pMoreBtn" aria-expanded="false" aria-controls="pMore">Más detalle <i></i></button>
+      <div class="pmore" id="pMore" hidden>
+        <div class="gpd">Gastando $ <input id="gpd" class="cell" inputmode="numeric" aria-label="Gasto por día"> por día te quedarían <b id="gpdR">$ 0</b> a fin de mes</div>
+        <div class="gpd" id="iniLn">El día <input id="iniD" class="cell dd" inputmode="numeric" aria-label="Día desde el que se mide"> tenías disponible $ <input id="iniV" class="cell" inputmode="numeric" aria-label="Disponible ese día"><button type="button" class="hoy" id="iniHoy" title="Empezar a medir desde hoy">medir desde hoy</button></div>
+        <div class="gpd" id="ritLn">A este ritmo terminarías el mes con <b id="ritF">$ 0</b></div>
+      </div></div>
+    <div class="daybox" id="day"><small>Para gastar por día</small><b id="dNum">$ 0</b><em id="dTxt"></em><span class="rit" id="dRit"></span><div class="dbar" title="Avance del mes"><i id="dBar"></i></div></div>
   </section>
 
   <section class="flow">
@@ -394,6 +411,14 @@ function gpdMig(){
   if(typeof S.gpd==='number'){if(S.gpd>0&&S.gpdByMes[S.mes]===undefined)S.gpdByMes[S.mes]=S.gpd;delete S.gpd}
   Object.keys(S.gpdByMes).forEach(function(k){var v=+S.gpdByMes[k];if(!/^\d{4}-\d\d$/.test(k)||!(v>=0))delete S.gpdByMes[k];else S.gpdByMes[k]=v});
 }
+/* Punto de partida para medir cuánto venís gastando por día: {v: disponible, d: día del mes} */
+function iniMig(){
+  if(!S.iniByMes||typeof S.iniByMes!=='object'||Array.isArray(S.iniByMes))S.iniByMes={};
+  Object.keys(S.iniByMes).forEach(function(k){var o=S.iniByMes[k];
+    if(!/^\d{4}-\d\d$/.test(k)||!o||typeof o!=='object'||!isFinite(+o.v)||!(+o.d>=1&&+o.d<=31))delete S.iniByMes[k];
+    else S.iniByMes[k]={v:Math.round(+o.v),d:Math.round(+o.d)}});
+}
+function iniGet(){return (S.iniByMes||{})[S.mes]||null}
 function gpdGet(){return +((S.gpdByMes||{})[S.mes])||0}
 function newId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
 if(!S.mig2){S.ahorros.forEach(function(c){if(c.v===400000)c.v=800;if(c.v===150000)c.v=300});S.mig2=1}
@@ -479,7 +504,7 @@ function switchMes(ym){
   if($('gpd'))$('gpd').value=fmtn(gpdGet());
   save();
 }
-migTj();ensureByMes();gpdMig();
+migTj();ensureByMes();gpdMig();iniMig();
 var ED={ing:false,gas:false,cue:false,aho:false};
 var GRIP='<button class="grip" aria-label="Arrastrar para mover" title="Arrastrar">⋮⋮</button>';
 var $=function(i){return document.getElementById(i)};
@@ -561,6 +586,7 @@ function totals(){
   gpdUpd(proy);
   $('barIn').style.width=(ti+to?ti/(ti+to)*100:50)+'%';
   daily(proy);
+  ritmo(proy);
   [['ing',ti],['gas',to]].forEach(function(p){
     document.querySelectorAll('.row[data-k="'+p[0]+'"]').forEach(function(el,i){
       el.querySelector('.share i').style.width=(p[1]?pend(S[p[0]][i])/p[1]*100:0)+'%';
@@ -581,6 +607,25 @@ function gpdUpd(proy){
   var L=monthDays().left,g=gpdGet(),r=proy-g*L,b=$('gpdR');
   b.textContent=(r<0?'-':'')+fmt(Math.abs(r));
   b.classList.toggle('neg',r<0);
+}
+/* Cuánto venís gastando por día: (disponible el día de partida − disponible ahora) / días transcurridos */
+function ritmo(proy){
+  var md=monthDays(),now=new Date();
+  var hoyD=md.isCur?now.getDate():(md.left===0?md.dim:0);
+  if(md.isCur&&!iniGet()){S.iniByMes[S.mes]={v:Math.round(proy),d:hoyD};try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+  var ini=iniGet(),R=$('dRit'),f=$('ritLn'),a=document.activeElement;
+  if($('iniD')&&a!==$('iniD'))$('iniD').value=ini?ini.d:'';
+  if($('iniV')&&a!==$('iniV'))$('iniV').value=ini?nf(ini.v):'';
+  $('iniHoy').hidden=!md.isCur;
+  $('iniLn').hidden=!hoyD&&!ini;
+  if(!hoyD||!ini||ini.d>hoyD){R.textContent='';f.hidden=true;return}
+  var dias=hoyD-ini.d+1,gast=ini.v-proy,per=gast/dias;
+  if(md.isCur&&dias===1&&Math.round(gast)===0){R.textContent='Desde hoy se mide cuánto gastás por día';f.hidden=true;return}
+  R.innerHTML=(md.isCur?'Venís gastando ':'Gastaste ')+'<b class="'+(per>0&&per>proy/Math.max(md.left,1)&&md.isCur?'neg':'')+'">'+(per<0?'-':'')+fmt(Math.abs(per))+'</b> por día';
+  R.title='En '+dias+(dias===1?' día':' días')+' (desde el día '+ini.d+')';
+  var fin=proy-per*Math.max(md.left-1,0),fb=$('ritF');
+  f.hidden=!md.isCur;
+  fb.textContent=(fin<0?'-':'')+fmt(Math.abs(fin));fb.classList.toggle('neg',fin<0);
 }
 function daily(proy){
   var md=monthDays(),dim=md.dim,left=md.left,done=md.done;
@@ -897,6 +942,27 @@ $('cot').addEventListener('blur',function(e){e.target.value=fmtn(S.cot)});
 $('gpd').value=fmtn(gpdGet());
 $('gpd').addEventListener('input',function(e){S.gpdByMes[S.mes]=Math.max(0,num(e.target.value));totals();save()});
 $('gpd').addEventListener('blur',function(e){e.target.value=fmtn(gpdGet())});
+function iniSet(){
+  var d=Math.min(Math.max(num($('iniD').value),1),monthDays().dim);
+  S.iniByMes[S.mes]={v:num($('iniV').value),d:d};totals();save();
+}
+$('iniD').addEventListener('input',function(e){if(num(e.target.value))iniSet()});
+$('iniV').addEventListener('input',iniSet);
+$('iniD').addEventListener('blur',function(e){var o=iniGet();e.target.value=o?o.d:''});
+$('iniV').addEventListener('blur',function(e){var o=iniGet();e.target.value=o?fmtn(o.v):''});
+$('iniHoy').onclick=function(){
+  var t=tenTotal()+sum(S.ing)-sum(S.gas);
+  S.iniByMes[S.mes]={v:Math.round(t),d:new Date().getDate()};totals();save();
+};
+/* "Más detalle": se abre y se cierra; queda recordado en este equipo */
+var MASK='presupuesto-ui-mas';
+function pMore(open){
+  $('pMore').hidden=!open;$('pMoreBtn').setAttribute('aria-expanded',open);
+  $('pMoreBtn').firstChild.textContent=open?'Menos detalle ':'Más detalle ';
+  try{localStorage.setItem(MASK,open?'1':'')}catch(e){}
+}
+$('pMoreBtn').onclick=function(){pMore($('pMore').hidden)};
+try{pMore(localStorage.getItem(MASK)==='1')}catch(e){}
 buildT();
 
 /* Ahorros extra: independiente de Mes y Tenencia */
@@ -1154,7 +1220,7 @@ $('impOk').onclick=function(){
   S=pending;S.mig1=1;if(!S.mes)S.mes=def.mes;if(!S.ahorros)S.ahorros=[];
   if(!S.ops)S.ops=[];
   S.ahorros.forEach(function(c){if(!c.id)c.id=newId()});
-  migTj();ensureByMes();gpdMig();
+  migTj();ensureByMes();gpdMig();iniMig();
   clearPending();save();
   $('mes').value=S.mes;$('cot').value=fmtn(S.cot);$('gpd').value=fmtn(gpdGet());
   build();buildT();buildA();buildOps();bmsg('Datos importados.');
@@ -1318,7 +1384,7 @@ function aplicarRemoto(json) {
     window.S = d; S.mig1 = 1;
     if (!S.mes) S.mes = def.mes; if (!S.ahorros) S.ahorros = []; if (!S.ops) S.ops = [];
     S.ahorros.forEach(c => { if (!c.id) c.id = newId() });
-    migTj(); ensureByMes(); gpdMig();
+    migTj(); ensureByMes(); gpdMig(); iniMig();
     ls.set(KEY, JSON.stringify(S));
     el('mes').value = S.mes; el('cot').value = fmtn(S.cot); el('gpd').value = fmtn(gpdGet());
     build(); buildT(); buildA(); buildOps();
