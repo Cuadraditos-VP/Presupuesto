@@ -220,6 +220,11 @@ span.av{cursor:default}
 .nd.ok{background:var(--in)} .nd.wait{background:#D9A23B} .nd.err{background:var(--out)}
 #nubeDot2{margin-right:8px;vertical-align:middle}
 .nubef{display:grid;gap:10px}
+.exr{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)}
+.exr span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.exr small{color:var(--mute);margin-right:4px}
+.exr b{font-weight:600;font-variant-numeric:tabular-nums}
+.ext{display:flex;justify-content:space-between;padding:10px 0 0;font-weight:700;font-variant-numeric:tabular-nums}
 .modal{position:fixed;inset:0;z-index:20;background:rgba(15,32,29,.5);display:flex;align-items:center;justify-content:center;padding:16px}
 .mcard{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:20px;width:min(520px,100%);max-height:min(80vh,640px);display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.25)}
 .mhead{display:flex;justify-content:space-between;align-items:center;padding:16px 16px 8px 20px}
@@ -301,7 +306,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <div class="pmore" id="pMore" hidden>
         <div class="gpd">Gastando $ <input id="gpd" class="cell" inputmode="numeric" aria-label="Gasto por día"> por día te quedarían <b id="gpdR">$ 0</b> a fin de mes</div>
         <div class="gpd" id="iniLn">El día <input id="iniD" class="cell dd" inputmode="numeric" aria-label="Día desde el que se mide"> tenías disponible $ <input id="iniV" class="cell" inputmode="numeric" aria-label="Disponible ese día"><button type="button" class="hoy" id="iniHoy" title="Empezar a medir desde hoy">medir desde hoy</button></div>
-        <div class="gpd" id="extLn" title="Préstamos, dólares cambiados desde Ahorros, etc. Se suma al punto de partida para que no cuente como que gastaste menos">Después entró plata extra (préstamo, cambio…) $ <input id="extV" class="cell" inputmode="numeric" aria-label="Plata extra que entró después del día de partida"></div>
+        <div class="gpd" id="extLn" title="Préstamos, dólares cambiados desde Ahorros, etc. No cuenta como que gastaste menos">Entró plata extra <b id="extT">$ 0</b><button type="button" class="hoy" id="extBtn" aria-haspopup="dialog">+ cargar</button></div>
         <div class="gpd" id="ritLn">A este ritmo terminarías el mes con <b id="ritF">$ 0</b></div>
       </div></div>
     <div class="daybox" id="day"><small>Para gastar por día</small><b id="dNum">$ 0</b><em id="dTxt"></em><span class="rit" id="dRit"></span><div class="dbar" title="Avance del mes"><i id="dBar"></i></div></div>
@@ -380,6 +385,7 @@ html,body{max-width:100%;overflow-x:hidden}
     </div>
   </div>
 
+  <div class="modal" id="extModal" role="dialog" aria-modal="true" aria-labelledby="extH" hidden><div class="mcard" style="width:min(400px,100%)"><div class="mhead"><h2 id="extH">Entró plata extra</h2><button class="x" id="extX" type="button" aria-label="Cerrar">&times;</button></div><div class="mbody"><p class="sumsub" style="text-align:left;margin:0 0 10px">Plata que entró este mes y no es un ingreso del mes: un préstamo, dólares que cambiaste de Ahorros, etc. Así no parece que gastaste menos.</p><form id="extForm" class="nubef"><input class="fld" id="extN" placeholder="Qué fue (ej.: Préstamo)" maxlength="60" autocomplete="off"><input class="fld" id="extM" inputmode="numeric" placeholder="Monto $" autocomplete="off" required><button class="sb" type="submit">Agregar</button></form><div id="extList" style="margin-top:14px"></div></div></div></div>
   <div class="modal" id="histModal" role="dialog" aria-modal="true" aria-labelledby="histT" hidden><div class="mcard"><div class="mhead"><h2 id="histT">Historial por mes</h2><button class="x" id="histX" type="button" aria-label="Cerrar">&times;</button></div><div class="mbody" id="histBox"></div></div></div>
   <div class="modal" id="nubeModal" role="dialog" aria-modal="true" aria-labelledby="nubeT" hidden><div class="mcard" style="width:min(400px,100%)"><div class="mhead"><h2 id="nubeT">Sincronizar</h2><button class="x" id="nubeX" type="button" aria-label="Cerrar">&times;</button></div><div class="mbody"><form id="nubeForm" class="nubef"><p class="sumsub" style="text-align:left;margin:0">Entrá con tu cuenta para ver los mismos datos en la PC y en el celular.</p><input class="fld" id="nubeMail" type="email" autocomplete="username" placeholder="Correo" required><input class="fld" id="nubePass" type="password" autocomplete="current-password" placeholder="Contraseña" required><button class="sb" type="submit">Entrar</button></form><div id="nubeInfo" class="nubef" hidden><p style="margin:0"><span class="nd nd-in" id="nubeDot2"></span><b id="nubeEst">Sincronizado</b></p><p class="sumsub" style="text-align:left;margin:0" id="nubeUser"></p><p class="sumsub" style="text-align:left;margin:0" id="nubeHora"></p><button class="sb" type="button" id="nubeSalir">Cerrar sesión</button></div><p class="sumsub" style="text-align:left;margin:10px 0 0;color:var(--out)" id="nubeMsg" role="status"></p></div></div></div>
 
@@ -417,9 +423,13 @@ function iniMig(){
   if(!S.iniByMes||typeof S.iniByMes!=='object'||Array.isArray(S.iniByMes))S.iniByMes={};
   Object.keys(S.iniByMes).forEach(function(k){var o=S.iniByMes[k];
     if(!/^\d{4}-\d\d$/.test(k)||!o||typeof o!=='object'||!isFinite(+o.v)||!(+o.d>=1&&+o.d<=31))delete S.iniByMes[k];
-    else{var n={v:Math.round(+o.v),d:Math.round(+o.d)},x=Math.round(+o.x||0);if(x>0)n.x=x;S.iniByMes[k]=n}});
+    else{var n={v:Math.round(+o.v),d:Math.round(+o.d)},ex=Array.isArray(o.ex)?o.ex:[];
+      if(+o.x>0)ex=ex.concat([{n:'Plata extra',v:+o.x}]);
+      ex=ex.filter(function(e){return e&&+e.v>0}).map(function(e){var q={n:String(e.n||'').slice(0,60),v:Math.round(+e.v)};if(+e.d>=1&&+e.d<=31)q.d=Math.round(+e.d);return q});
+      if(ex.length)n.ex=ex;S.iniByMes[k]=n}});
 }
 function iniGet(){return (S.iniByMes||{})[S.mes]||null}
+function exTot(o){return ((o&&o.ex)||[]).reduce(function(t,e){return t+(+e.v||0)},0)}
 function gpdGet(){return +((S.gpdByMes||{})[S.mes])||0}
 function newId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
 if(!S.mig2){S.ahorros.forEach(function(c){if(c.v===400000)c.v=800;if(c.v===150000)c.v=300});S.mig2=1}
@@ -620,9 +630,9 @@ function ritmo(proy){
   $('iniHoy').hidden=!md.isCur;
   $('iniLn').hidden=!hoyD&&!ini;
   $('extLn').hidden=!ini;
-  if($('extV')&&a!==$('extV'))$('extV').value=ini&&ini.x?nf(ini.x):'';
+  $('extT').textContent=fmt(exTot(ini));$('extT').hidden=!exTot(ini);
   if(!hoyD||!ini||ini.d>hoyD){R.textContent='';f.hidden=true;return}
-  var dias=hoyD-ini.d+1,gast=ini.v+(+ini.x||0)-proy,per=gast/dias;
+  var dias=hoyD-ini.d+1,gast=ini.v+exTot(ini)-proy,per=gast/dias;
   if(md.isCur&&dias===1&&Math.round(gast)===0){R.textContent='Desde hoy se mide cuánto gastás por día';f.hidden=true;return}
   R.innerHTML=(md.isCur?'Venís gastando ':'Gastaste ')+'<b class="'+(per>0&&per>proy/Math.max(md.left,1)&&md.isCur?'neg':'')+'">'+(per<0?'-':'')+fmt(Math.abs(per))+'</b> por día';
   R.title='En '+dias+(dias===1?' día':' días')+' (desde el día '+ini.d+')';
@@ -947,11 +957,41 @@ $('gpd').addEventListener('input',function(e){S.gpdByMes[S.mes]=Math.max(0,num(e
 $('gpd').addEventListener('blur',function(e){e.target.value=fmtn(gpdGet())});
 function iniSet(){
   var d=Math.min(Math.max(num($('iniD').value),1),monthDays().dim);
-  var o=iniGet(),n={v:num($('iniV').value),d:d};if(o&&o.x)n.x=o.x;
+  var o=iniGet(),n={v:num($('iniV').value),d:d};if(o&&o.ex)n.ex=o.ex;
   S.iniByMes[S.mes]=n;totals();save();
 }
-$('extV').addEventListener('input',function(e){var o=iniGet();if(!o)return;var x=Math.max(0,num(e.target.value));if(x)o.x=x;else delete o.x;totals();save()});
-$('extV').addEventListener('blur',function(e){var o=iniGet();e.target.value=o&&o.x?fmtn(o.x):''});
+/* Plata extra (préstamo, cambio…): se carga desde una ventana y se suma al punto de partida */
+var extOpener=null;
+function extBuild(){
+  var o=iniGet(),ex=(o&&o.ex)||[];
+  $('extList').innerHTML=ex.length?ex.map(function(e,i){
+    return '<div class="exr"><span>'+(e.d?'<small>Día '+e.d+'</small>':'')+eh(e.n||'Plata extra')+'</span><b>'+fmt(e.v)+'</b><button class="x" type="button" data-i="'+i+'" aria-label="Quitar '+eh(e.n||'Plata extra')+'">&times;</button></div>'}).join('')+
+    (ex.length>1?'<div class="ext"><span>Total</span><span>'+fmt(exTot(o))+'</span></div>':''):
+    '<p class="sumsub" style="text-align:left;margin:0">Todavía no cargaste nada este mes.</p>';
+}
+function extClose(){$('extModal').hidden=true;document.body.style.overflow='';if(extOpener&&extOpener.focus)extOpener.focus()}
+$('extBtn').onclick=function(){
+  extOpener=this;$('extN').value='';$('extM').value='';extBuild();
+  $('extModal').hidden=false;document.body.style.overflow='hidden';$('extM').focus();
+};
+$('extX').onclick=extClose;
+$('extModal').addEventListener('click',function(e){if(e.target===this)extClose()});
+document.addEventListener('keydown',function(e){if(!$('extModal').hidden&&e.key==='Escape'){e.preventDefault();extClose()}});
+$('extM').addEventListener('input',function(e){var v=num(e.target.value);e.target.value=v?v.toLocaleString('es-AR'):''});
+$('extForm').addEventListener('submit',function(e){
+  e.preventDefault();
+  var o=iniGet(),v=Math.max(0,num($('extM').value));if(!o||!v){$('extM').focus();return}
+  var it={n:$('extN').value.trim().slice(0,60)||'Plata extra',v:v};
+  if(monthDays().isCur)it.d=new Date().getDate();
+  (o.ex=o.ex||[]).push(it);
+  $('extN').value='';$('extM').value='';extBuild();totals();save();$('extN').focus();
+});
+$('extList').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-i]');if(!b)return;
+  var o=iniGet();if(!o||!o.ex)return;
+  o.ex.splice(+b.dataset.i,1);if(!o.ex.length)delete o.ex;
+  extBuild();totals();save();
+});
 $('iniD').addEventListener('input',function(e){if(num(e.target.value))iniSet()});
 $('iniV').addEventListener('input',iniSet);
 $('iniD').addEventListener('blur',function(e){var o=iniGet();e.target.value=o?o.d:''});
