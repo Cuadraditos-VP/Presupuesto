@@ -301,6 +301,7 @@ html,body{max-width:100%;overflow-x:hidden}
       <div class="pmore" id="pMore" hidden>
         <div class="gpd">Gastando $ <input id="gpd" class="cell" inputmode="numeric" aria-label="Gasto por día"> por día te quedarían <b id="gpdR">$ 0</b> a fin de mes</div>
         <div class="gpd" id="iniLn">El día <input id="iniD" class="cell dd" inputmode="numeric" aria-label="Día desde el que se mide"> tenías disponible $ <input id="iniV" class="cell" inputmode="numeric" aria-label="Disponible ese día"><button type="button" class="hoy" id="iniHoy" title="Empezar a medir desde hoy">medir desde hoy</button></div>
+        <div class="gpd" id="extLn" title="Préstamos, dólares cambiados desde Ahorros, etc. Se suma al punto de partida para que no cuente como que gastaste menos">Después entró plata extra (préstamo, cambio…) $ <input id="extV" class="cell" inputmode="numeric" aria-label="Plata extra que entró después del día de partida"></div>
         <div class="gpd" id="ritLn">A este ritmo terminarías el mes con <b id="ritF">$ 0</b></div>
       </div></div>
     <div class="daybox" id="day"><small>Para gastar por día</small><b id="dNum">$ 0</b><em id="dTxt"></em><span class="rit" id="dRit"></span><div class="dbar" title="Avance del mes"><i id="dBar"></i></div></div>
@@ -416,7 +417,7 @@ function iniMig(){
   if(!S.iniByMes||typeof S.iniByMes!=='object'||Array.isArray(S.iniByMes))S.iniByMes={};
   Object.keys(S.iniByMes).forEach(function(k){var o=S.iniByMes[k];
     if(!/^\d{4}-\d\d$/.test(k)||!o||typeof o!=='object'||!isFinite(+o.v)||!(+o.d>=1&&+o.d<=31))delete S.iniByMes[k];
-    else S.iniByMes[k]={v:Math.round(+o.v),d:Math.round(+o.d)}});
+    else{var n={v:Math.round(+o.v),d:Math.round(+o.d)},x=Math.round(+o.x||0);if(x>0)n.x=x;S.iniByMes[k]=n}});
 }
 function iniGet(){return (S.iniByMes||{})[S.mes]||null}
 function gpdGet(){return +((S.gpdByMes||{})[S.mes])||0}
@@ -618,8 +619,10 @@ function ritmo(proy){
   if($('iniV')&&a!==$('iniV'))$('iniV').value=ini?nf(ini.v):'';
   $('iniHoy').hidden=!md.isCur;
   $('iniLn').hidden=!hoyD&&!ini;
+  $('extLn').hidden=!ini;
+  if($('extV')&&a!==$('extV'))$('extV').value=ini&&ini.x?nf(ini.x):'';
   if(!hoyD||!ini||ini.d>hoyD){R.textContent='';f.hidden=true;return}
-  var dias=hoyD-ini.d+1,gast=ini.v-proy,per=gast/dias;
+  var dias=hoyD-ini.d+1,gast=ini.v+(+ini.x||0)-proy,per=gast/dias;
   if(md.isCur&&dias===1&&Math.round(gast)===0){R.textContent='Desde hoy se mide cuánto gastás por día';f.hidden=true;return}
   R.innerHTML=(md.isCur?'Venís gastando ':'Gastaste ')+'<b class="'+(per>0&&per>proy/Math.max(md.left,1)&&md.isCur?'neg':'')+'">'+(per<0?'-':'')+fmt(Math.abs(per))+'</b> por día';
   R.title='En '+dias+(dias===1?' día':' días')+' (desde el día '+ini.d+')';
@@ -944,8 +947,11 @@ $('gpd').addEventListener('input',function(e){S.gpdByMes[S.mes]=Math.max(0,num(e
 $('gpd').addEventListener('blur',function(e){e.target.value=fmtn(gpdGet())});
 function iniSet(){
   var d=Math.min(Math.max(num($('iniD').value),1),monthDays().dim);
-  S.iniByMes[S.mes]={v:num($('iniV').value),d:d};totals();save();
+  var o=iniGet(),n={v:num($('iniV').value),d:d};if(o&&o.x)n.x=o.x;
+  S.iniByMes[S.mes]=n;totals();save();
 }
+$('extV').addEventListener('input',function(e){var o=iniGet();if(!o)return;var x=Math.max(0,num(e.target.value));if(x)o.x=x;else delete o.x;totals();save()});
+$('extV').addEventListener('blur',function(e){var o=iniGet();e.target.value=o&&o.x?fmtn(o.x):''});
 $('iniD').addEventListener('input',function(e){if(num(e.target.value))iniSet()});
 $('iniV').addEventListener('input',iniSet);
 $('iniD').addEventListener('blur',function(e){var o=iniGet();e.target.value=o?o.d:''});
