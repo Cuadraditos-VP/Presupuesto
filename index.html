@@ -426,9 +426,11 @@ function iniMig(){
     else{var n={v:Math.round(+o.v),d:Math.round(+o.d)},ex=Array.isArray(o.ex)?o.ex:[];
       if(+o.x>0)ex=ex.concat([{n:'Plata extra',v:+o.x}]);
       ex=ex.filter(function(e){return e&&+e.v>0}).map(function(e){var q={n:String(e.n||'').slice(0,60),v:Math.round(+e.v)};if(+e.d>=1&&+e.d<=31)q.d=Math.round(+e.d);return q});
-      if(ex.length)n.ex=ex;S.iniByMes[k]=n}});
+      if(ex.length)n.ex=ex;if(isFinite(+o.i)&&o.i!==null&&o.i!=='')n.i=Math.round(+o.i);S.iniByMes[k]=n}});
 }
 function iniGet(){return (S.iniByMes||{})[S.mes]||null}
+/* Ingresos que se agregaron (o subieron) después del día de partida: no cuentan como gastar menos */
+function ingNuevo(o){return o&&typeof o.i==='number'?sumAll(S.ing)-o.i:0}
 function exTot(o){return ((o&&o.ex)||[]).reduce(function(t,e){return t+(+e.v||0)},0)}
 function gpdGet(){return +((S.gpdByMes||{})[S.mes])||0}
 function newId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
@@ -623,7 +625,8 @@ function gpdUpd(proy){
 function ritmo(proy){
   var md=monthDays(),now=new Date();
   var hoyD=md.isCur?now.getDate():(md.left===0?md.dim:0);
-  if(md.isCur&&!iniGet()){S.iniByMes[S.mes]={v:Math.round(proy),d:hoyD};try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+  if(md.isCur&&!iniGet()){S.iniByMes[S.mes]={v:Math.round(proy),d:hoyD,i:Math.round(sumAll(S.ing))};try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+  if(iniGet()&&typeof iniGet().i!=='number'){iniGet().i=Math.round(sumAll(S.ing));try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
   var ini=iniGet(),R=$('dRit'),f=$('ritLn'),a=document.activeElement;
   if($('iniD')&&a!==$('iniD'))$('iniD').value=ini?ini.d:'';
   if($('iniV')&&a!==$('iniV'))$('iniV').value=ini?nf(ini.v):'';
@@ -632,10 +635,10 @@ function ritmo(proy){
   $('extLn').hidden=!ini;
   $('extT').textContent=fmt(exTot(ini));$('extT').hidden=!exTot(ini);
   if(!hoyD||!ini||ini.d>hoyD){R.textContent='';f.hidden=true;return}
-  var dias=hoyD-ini.d+1,gast=ini.v+exTot(ini)-proy,per=gast/dias;
+  var dias=hoyD-ini.d+1,nI=ingNuevo(ini),gast=ini.v+exTot(ini)+nI-proy,per=gast/dias;
   if(md.isCur&&dias===1&&Math.round(gast)===0){R.textContent='Desde hoy se mide cuánto gastás por día';f.hidden=true;return}
   R.innerHTML=(md.isCur?'Venís gastando ':'Gastaste ')+'<b class="'+(per>0&&per>proy/Math.max(md.left,1)&&md.isCur?'neg':'')+'">'+(per<0?'-':'')+fmt(Math.abs(per))+'</b> por día';
-  R.title='En '+dias+(dias===1?' día':' días')+' (desde el día '+ini.d+')';
+  R.title='En '+dias+(dias===1?' día':' días')+' (desde el día '+ini.d+')'+(Math.round(nI)?'. No se cuentan '+(nI<0?'-':'')+fmt(Math.abs(nI))+' de ingresos '+(nI<0?'que bajaste':'que agregaste')+' después de ese día':'');
   var fin=proy-per*Math.max(md.left-1,0),fb=$('ritF');
   f.hidden=!md.isCur;
   fb.textContent=(fin<0?'-':'')+fmt(Math.abs(fin));fb.classList.toggle('neg',fin<0);
@@ -957,7 +960,7 @@ $('gpd').addEventListener('input',function(e){S.gpdByMes[S.mes]=Math.max(0,num(e
 $('gpd').addEventListener('blur',function(e){e.target.value=fmtn(gpdGet())});
 function iniSet(){
   var d=Math.min(Math.max(num($('iniD').value),1),monthDays().dim);
-  var o=iniGet(),n={v:num($('iniV').value),d:d};if(o&&o.ex)n.ex=o.ex;
+  var o=iniGet(),n={v:num($('iniV').value),d:d};if(o&&o.ex)n.ex=o.ex;if(o&&typeof o.i==='number')n.i=o.i;
   S.iniByMes[S.mes]=n;totals();save();
 }
 /* Plata extra (préstamo, cambio…): se carga desde una ventana y se suma al punto de partida */
@@ -998,7 +1001,7 @@ $('iniD').addEventListener('blur',function(e){var o=iniGet();e.target.value=o?o.
 $('iniV').addEventListener('blur',function(e){var o=iniGet();e.target.value=o?fmtn(o.v):''});
 $('iniHoy').onclick=function(){
   var t=tenTotal()+sum(S.ing)-sum(S.gas);
-  S.iniByMes[S.mes]={v:Math.round(t),d:new Date().getDate()};totals();save();
+  S.iniByMes[S.mes]={v:Math.round(t),d:new Date().getDate(),i:Math.round(sumAll(S.ing))};totals();save();
 };
 /* "Más detalle": se abre y se cierra; queda recordado en este equipo */
 var MASK='presupuesto-ui-mas';
